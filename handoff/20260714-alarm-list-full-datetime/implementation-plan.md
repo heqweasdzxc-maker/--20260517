@@ -45,7 +45,7 @@
 - Consumes: verified frontend source and build output
 - Produces: reversible frontend-only deployment ZIP and SHA-256 file
 
-- [ ] Build the incremental staging directory.
-- [ ] Implement guarded hot deployment with automatic rollback.
-- [ ] Verify the ZIP from a clean extraction.
-- [ ] Publish the handoff record to GitHub.
+- [x] Build the incremental staging directory.
+- [x] Implement guarded hot deployment with automatic rollback.
+- [x] Verify the ZIP from a clean extraction.
+- [x] Publish the handoff record to GitHub.
