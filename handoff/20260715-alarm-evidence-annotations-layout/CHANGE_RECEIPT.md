@@ -4,7 +4,15 @@
 - Target: `192.168.2.167`
 - Package: `river-watch-alarm-evidence-annotations-layout-increment-20260715.zip`
 - Package SHA-256: `8535cd09371995ebb8614b3349c61524ed6a20222eeb5ef2418539cc664ad5df`
-- Deployment state: not yet deployed; awaiting the server-side receipt containing `VERIFY OK` and `DONE`.
+- Deployment state: first attempt stopped safely during baseline verification; a rebased package is required.
+
+## First deployment attempt
+
+- Attempted at: 2026-07-15 16:48 Asia/Shanghai.
+- Package and package tests passed on the server.
+- Deployment stopped before backup/apply step because the running container had `server.mjs` SHA-256 `7db1272481c3a6e51797759c22f1cb8574d1c1abed5044b7988baffc6f8182ca`, while the package was based on `88ebc5a208c1c3e641e167ddffd59876c5371118ae0f21d04bca3e92db238ba3`.
+- `BACKEND_CHANGED` and `FRONTEND_CHANGED` were still zero, so no backend, frontend, database, model, or AI service change was applied.
+- The next package must be rebased on the exact currently running backend instead of weakening or bypassing the baseline guard.
 
 ## Reported issues
 
