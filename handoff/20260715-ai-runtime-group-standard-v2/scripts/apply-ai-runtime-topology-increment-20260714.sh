@@ -138,11 +138,14 @@ trap 'rollback_on_error "$LINENO"' ERR
 
 wait_group() {
   local unit="$1" expected="$2" model="$3" since="$4"
-  local deadline=$((SECONDS + 900)) main_pid child_count logs model_count provider_count
+  local deadline=$((SECONDS + 900)) next_report=$SECONDS
+  local main_pid child_count logs model_count provider_count
   while (( SECONDS < deadline )); do
+    child_count=0
+    model_count=0
+    provider_count=0
     if systemctl is-active --quiet "$unit"; then
       main_pid="$(systemctl show -p MainPID --value "$unit")"
-      child_count=0
       if [[ "$main_pid" =~ ^[1-9][0-9]*$ ]]; then
         child_count="$(pgrep -P "$main_pid" -f 'workers/river_worker.py' 2>/dev/null | wc -l | tr -d ' ')"
       fi
@@ -153,6 +156,10 @@ wait_group() {
         log "$unit ready: main_pid=$main_pid children=$child_count model_logs=$model_count provider_logs=$provider_count"
         return 0
       fi
+    fi
+    if (( SECONDS >= next_report )); then
+      log "waiting for $unit: children=$child_count/$expected model_logs=$model_count/$expected provider_logs=$provider_count/$expected"
+      next_report=$((SECONDS + 30))
     fi
     sleep 5
   done
