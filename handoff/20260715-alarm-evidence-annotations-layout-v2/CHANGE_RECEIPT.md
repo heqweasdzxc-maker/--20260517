@@ -4,7 +4,17 @@
 - Target: `192.168.2.167`
 - Package: `river-watch-alarm-evidence-annotations-layout-increment-20260715-v2.zip`
 - Package SHA-256: `aff5cbb299c263d53305d93dde0aa78e967ec4f693bf375ae8cae9a14d023322`
-- Deployment state: packaged and verified locally; not yet deployed.
+- Deployment state: deployed and verified on `192.168.2.167`.
+
+## Production deployment receipt
+
+- Completed at: 2026-07-15 21:15:34 Asia/Shanghai.
+- Result: `VERIFY OK` and `DONE`.
+- Backend health: `UP`, MySQL store.
+- Backend and frontend both became ready on readiness attempt 2 of 60.
+- Legacy evidence annotations recovered: 650.
+- Rollback backup: `/home/ai-river/river-watch/backups/alarm-evidence-annotations-layout-v2-20260715-20260715-211519`.
+- No automatic rollback occurred.
 
 ## Rebase reason
 
