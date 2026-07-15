@@ -73,6 +73,12 @@ class RuntimeTopologyPackageTest(unittest.TestCase):
             script.index('mkdir -p "$BACKUP_DIR"'),
         )
 
+    def test_group_wait_reports_progress_instead_of_appearing_stuck(self):
+        script = self.read("scripts/apply-ai-runtime-topology-increment-20260714.sh")
+        self.assertIn("next_report=$SECONDS", script)
+        self.assertIn('waiting for $unit: children=$child_count/$expected', script)
+        self.assertIn("next_report=$((SECONDS + 30))", script)
+
     def test_verify_script_requires_group_only_topology(self):
         script = self.read("scripts/verify-ai-runtime-topology-20260714.sh")
         self.assertIn("assert_active river-ai-group@river-a.service", script)
