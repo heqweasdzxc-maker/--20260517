@@ -1,4 +1,3 @@
-
 # River Watch training capture hotfix v2
 
 - Target: `192.168.2.167`
@@ -43,5 +42,3 @@ After deployment, confirm at least one online channel writes a non-empty JPEG,
 its manifest row is `SUCCESS` or `LOW_RESOLUTION`, and no RTSP credentials appear
 in the manifest or journal. Do not mark production deployment complete before
 this evidence is collected.
-
-
