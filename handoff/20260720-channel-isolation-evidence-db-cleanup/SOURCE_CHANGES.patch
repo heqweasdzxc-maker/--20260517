@@ -1,0 +1,294 @@
+diff --git "a/_verify_group_pool_20260716\\river-watch-group-session-pool-increment-20260716\\ai-pipeline\\workers\\group_pool_core.py" "b/river-watch-channel-isolation-evidence-db-cleanup-increment-20260720\\ai-pipeline\\workers\\group_pool_core.py"
+index 96fe60d..9eb340c 100644
+--- "a/_verify_group_pool_20260716\\river-watch-group-session-pool-increment-20260716\\ai-pipeline\\workers\\group_pool_core.py"
++++ "b/river-watch-channel-isolation-evidence-db-cleanup-increment-20260720\\ai-pipeline\\workers\\group_pool_core.py"
+@@ -80,8 +80,16 @@ class DeadlineScheduler:
+             return None
+         ready.sort()
+         return ready[0][2]
+ 
+ 
+-def filter_boxes(boxes: Iterable[dict], confidence: float) -> list[dict]:
++def filter_boxes(
++    boxes: Iterable[dict], confidence: float, allowed_classes: Iterable[str] | None = None
++) -> list[dict]:
+     threshold = float(confidence)
+-    return [dict(box) for box in boxes if float(box.get("score", 0.0)) >= threshold]
++    allowed = {str(item).strip() for item in (allowed_classes or ()) if str(item).strip()}
++    return [
++        dict(box)
++        for box in boxes
++        if float(box.get("score", 0.0)) >= threshold
++        and (not allowed or str(box.get("cls") or box.get("label") or box.get("name") or "").strip() in allowed)
++    ]
+diff --git "a/_verify_group_pool_20260716\\river-watch-group-session-pool-increment-20260716\\ai-pipeline\\workers\\group_pool_runtime.py" "b/river-watch-channel-isolation-evidence-db-cleanup-increment-20260720\\ai-pipeline\\workers\\group_pool_runtime.py"
+index 82e388b..08fc94b 100644
+--- "a/_verify_group_pool_20260716\\river-watch-group-session-pool-increment-20260716\\ai-pipeline\\workers\\group_pool_runtime.py"
++++ "b/river-watch-channel-isolation-evidence-db-cleanup-increment-20260720\\ai-pipeline\\workers\\group_pool_runtime.py"
+@@ -17,10 +17,11 @@ class ChannelConfig:
+     image_size: int
+     providers: tuple[str, ...]
+     confidence: float
+     sample_fps: float
+     detectors: tuple[str, ...]
++    allowed_alarm_types: tuple[str, ...] = ()
+     values: dict[str, str] | None = None
+ 
+ 
+ @dataclass(frozen=True)
+ class GroupConfig:
+@@ -78,10 +79,11 @@ def load_channel_config(path: str | Path) -> ChannelConfig:
+         image_size=int(values.get("YOLO_IMGSZ", "640")),
+         providers=_csv(values.get("ORT_PROVIDERS", "")),
+         confidence=float(values.get("YOLO_CONF", "0.35")),
+         sample_fps=float(values.get("SAMPLE_FPS", "4")),
+         detectors=_csv(values.get("DETECTORS", "floating,color")),
++        allowed_alarm_types=_csv(values.get("ALLOWED_ALARM_TYPES", "")),
+         values=values,
+     )
+ 
+ 
+ def pool_size_for(group_id: str) -> int:
+@@ -191,11 +193,13 @@ class GroupRuntime:
+             session.request_restart(str(error))
+             return
+         session.busy = False
+         channel = self.channels[str(result["channel_id"])]
+         enriched = dict(result)
+-        enriched["boxes"] = filter_boxes(result.get("boxes", ()), channel.confidence)
++        enriched["boxes"] = filter_boxes(
++            result.get("boxes", ()), channel.confidence, channel.allowed_alarm_types
++        )
+         self.backend.publish_result(channel, enriched)
+ 
+ 
+ def _bool(value: str | None) -> bool:
+     return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
+diff --git "a/river-watch-event-situation-persistent-aggregation-increment-20260718-v2\\frontend\\src\\composables\\useWorkspace.ts" "b/river-watch-channel-isolation-evidence-db-cleanup-increment-20260720\\frontend\\src\\composables\\useWorkspace.ts"
+index 6d2e01b..e563666 100644
+--- "a/river-watch-event-situation-persistent-aggregation-increment-20260718-v2\\frontend\\src\\composables\\useWorkspace.ts"
++++ "b/river-watch-channel-isolation-evidence-db-cleanup-increment-20260720\\frontend\\src\\composables\\useWorkspace.ts"
+@@ -138,51 +138,74 @@ const selectedAggregateEvent = computed(() => {
+   if (!alarmId) return undefined;
+   return (platform.events || []).find((event) => event.firstAlarmId === alarmId || event.latestAlarmId === alarmId);
+ });
+ const capturedAlarmEvidenceUrl = ref('');
+ const capturedAlarmEvidenceMetadata = ref<AlarmEvidenceMetadata | null>(null);
++const capturedAlarmEvidenceLoading = ref(false);
++const capturedAlarmEvidenceError = ref('');
+ let alarmEvidenceRequest = 0;
+ 
+-watch(
+-  () => selectedAlarm.value?.id,
+-  async (alarmId) => {
+-    const requestId = ++alarmEvidenceRequest;
+-    if (capturedAlarmEvidenceUrl.value) URL.revokeObjectURL(capturedAlarmEvidenceUrl.value);
+-    capturedAlarmEvidenceUrl.value = '';
+-    capturedAlarmEvidenceMetadata.value = null;
+-    if (!alarmId) return;
+-
+-    const authorization: Record<string, string> = {};
+-    if (platform.authToken) authorization.Authorization = `Bearer ${platform.authToken}`;
+-    const loadMedia = async () => {
+-      try {
+-        const response = await fetch(`/api/alarm/alarms/${encodeURIComponent(alarmId)}/evidence`, {
+-          headers: { ...authorization, Accept: 'image/jpeg,image/*' },
+-        });
+-        if (!response.ok) return;
+-        const blob = await response.blob();
+-        if (requestId !== alarmEvidenceRequest || !blob.size) return;
+-        capturedAlarmEvidenceUrl.value = URL.createObjectURL(blob);
+-      } catch {
+-        // Missing historical evidence is rendered explicitly in the review dialog.
++async function loadAlarmEvidence(alarmId?: string) {
++  const requestId = ++alarmEvidenceRequest;
++  if (capturedAlarmEvidenceUrl.value) URL.revokeObjectURL(capturedAlarmEvidenceUrl.value);
++  capturedAlarmEvidenceUrl.value = '';
++  capturedAlarmEvidenceMetadata.value = null;
++  capturedAlarmEvidenceError.value = '';
++  capturedAlarmEvidenceLoading.value = Boolean(alarmId);
++  if (!alarmId) return;
++
++  const authorization: Record<string, string> = {};
++  if (platform.authToken) authorization.Authorization = `Bearer ${platform.authToken}`;
++  const requestOptions = { credentials: 'same-origin' as const, cache: 'no-store' as const };
++  const loadMedia = async () => {
++    try {
++      const response = await fetch(`/api/alarm/alarms/${encodeURIComponent(alarmId)}/evidence`, {
++        ...requestOptions,
++        headers: { ...authorization, Accept: 'image/jpeg,image/*' },
++      });
++      if (!response.ok) {
++        if (requestId === alarmEvidenceRequest) {
++          capturedAlarmEvidenceError.value = response.status === 404
++            ? '该告警未保存历史截图或片段'
++            : `告警证据加载失败（HTTP ${response.status}）`;
++        }
++        return;
++      }
++      const blob = await response.blob();
++      if (requestId !== alarmEvidenceRequest) return;
++      if (!blob.size || (blob.type && !blob.type.startsWith('image/'))) {
++        capturedAlarmEvidenceError.value = '告警证据内容无效，请检查证据接口';
++        return;
+       }
+-    };
+-    const loadMetadata = async () => {
+-      try {
+-        const response = await fetch(`/api/alarm/alarms/${encodeURIComponent(alarmId)}/evidence/metadata`, {
+-          headers: { ...authorization, Accept: 'application/json' },
+-        });
+-        if (!response.ok) return;
+-        const body = await response.json();
+-        if (requestId !== alarmEvidenceRequest) return;
+-        capturedAlarmEvidenceMetadata.value = (body?.data || body) as AlarmEvidenceMetadata;
+-      } catch {
+-        // Legacy deployments continue to use the recent AI event fallback.
++      capturedAlarmEvidenceUrl.value = URL.createObjectURL(blob);
++    } catch {
++      if (requestId === alarmEvidenceRequest) {
++        capturedAlarmEvidenceError.value = '告警证据加载失败，请检查前端代理或后端服务';
+       }
+-    };
+-    await Promise.all([loadMedia(), loadMetadata()]);
+-  },
++    }
++  };
++  const loadMetadata = async () => {
++    try {
++      const response = await fetch(`/api/alarm/alarms/${encodeURIComponent(alarmId)}/evidence/metadata`, {
++        ...requestOptions,
++        headers: { ...authorization, Accept: 'application/json' },
++      });
++      if (!response.ok) return;
++      const body = await response.json();
++      if (requestId !== alarmEvidenceRequest) return;
++      capturedAlarmEvidenceMetadata.value = (body?.data || body) as AlarmEvidenceMetadata;
++    } catch {
++      // Legacy deployments continue to use the recent AI event fallback.
++    }
++  };
++  await Promise.all([loadMedia(), loadMetadata()]);
++  if (requestId === alarmEvidenceRequest) capturedAlarmEvidenceLoading.value = false;
++}
++
++watch(
++  () => selectedAlarm.value?.id,
++  (alarmId) => { void loadAlarmEvidence(alarmId); },
+ );
+ const selectedCamera = computed(() => platform.activeCamera);
+ const mainTrend = computed(() => platform.reportMetrics[0]?.trend ?? []);
+ const playbackPageSize = 10;
+ const playbackPage = ref(1);
+@@ -338,10 +361,15 @@ const selectedAlarmEvidenceMedia = computed(() => {
+   ];
+ 
+   const media = candidates.find((candidate) => isPersistedEvidenceUrl(candidate.url));
+   return media ? { url: String(media.url), type: media.type as 'image' | 'video' } : undefined;
+ });
++const selectedAlarmEvidenceStatusText = computed(() => {
++  if (capturedAlarmEvidenceLoading.value) return '正在加载告警时刻证据...';
++  if (capturedAlarmEvidenceError.value) return capturedAlarmEvidenceError.value;
++  return '该告警未保存历史截图或片段，禁止使用当前实时视频替代';
++});
+ const selectedAlarmEvidenceBoxes = computed<AlarmEvidenceBox[]>(() => {
+   const alarm = selectedAlarm.value;
+   const event = selectedAlarmEvidenceEvent.value;
+   if (!alarm) return [];
+ 
+@@ -399,13 +427,15 @@ const cameraPreviewTitle = computed(() => {
+   return `${camera.name} · 通道预览`;
+ });
+ const cameraNameById = computed(() => new Map(platform.cameras.map((camera) => [camera.id, camera.name])));
+ 
+ function openAlarm(id: string) {
++  const reopeningSelectedAlarm = selectedAlarm.value?.id === id;
+   platform.selectAlarm(id);
+   selectedAlarmSnapshot.value = platform.selectedAlarm ? { ...platform.selectedAlarm } : null;
+   alarmDrawer.value = true;
++  if (reopeningSelectedAlarm) void loadAlarmEvidence(id);
+ }
+ 
+ function openPlaybackAlarm(alarm: Alarm) {
+   platform.selectCamera(alarm.cameraId);
+   playbackProgress.value = ptsToProgress(alarm.pts);
+@@ -1213,11 +1243,12 @@ watch([playbackTypeFilter, playbackSeverityFilter, playbackStatusFilter], () =>
+     pagedPlaybackEvents,
+     playbackCurrentTime,
+     selectedAlarmWorkOrder,
+     selectedAlarmCamera,
+     selectedAlarmEvidenceEvent,
+-    selectedAlarmEvidenceMedia,
++     selectedAlarmEvidenceMedia,
++     selectedAlarmEvidenceStatusText,
+     selectedAlarmEvidenceBoxes,
+     selectedAlarmEvidenceTime,
+     selectedAlarmEvidenceSource,
+     selectedAlarmDeviceName,
+     selectedAlarmUavTask,
+diff --git "a/river-watch-event-situation-persistent-aggregation-increment-20260718-v2\\frontend\\src\\components\\WorkspaceDialogs.vue" "b/river-watch-channel-isolation-evidence-db-cleanup-increment-20260720\\frontend\\src\\components\\WorkspaceDialogs.vue"
+index 67dd35b..878f074 100644
+--- "a/river-watch-event-situation-persistent-aggregation-increment-20260718-v2\\frontend\\src\\components\\WorkspaceDialogs.vue"
++++ "b/river-watch-channel-isolation-evidence-db-cleanup-increment-20260720\\frontend\\src\\components\\WorkspaceDialogs.vue"
+@@ -51,10 +51,11 @@ const {
+   playbackCurrentTime,
+   selectedAlarmWorkOrder,
+   selectedAlarmCamera,
+   selectedAlarmEvidenceEvent,
+   selectedAlarmEvidenceMedia,
++  selectedAlarmEvidenceStatusText,
+   selectedAlarmEvidenceBoxes,
+   selectedAlarmEvidenceTime,
+   selectedAlarmEvidenceSource,
+   selectedAlarmDeviceName,
+   selectedAlarmUavTask,
+@@ -340,11 +341,11 @@ const {
+             :src="selectedAlarmEvidenceMedia.url"
+             :alt="`${selectedAlarmDeviceName || selectedAlarm.cameraName} 告警时刻证据`"
+           />
+           <div v-else class="alarm-evidence-backdrop">
+             <strong>{{ selectedAlarmDeviceName || selectedAlarm.cameraName }}</strong>
+-            <span>该告警未保存历史截图或片段，禁止使用当前实时视频替代</span>
++            <span>{{ selectedAlarmEvidenceStatusText }}</span>
+           </div>
+           <span
+             v-for="box in selectedAlarmEvidenceBoxes"
+             :key="box.id"
+             class="alarm-evidence-box"
+diff --git "a/river-watch-event-situation-persistent-aggregation-increment-20260718-v2\\frontend\\src\\__tests__\\alarmReviewDialog.test.ts" "b/river-watch-channel-isolation-evidence-db-cleanup-increment-20260720\\frontend\\src\\__tests__\\alarmReviewDialog.test.ts"
+index cafb4e8..9a3ea7b 100644
+--- "a/river-watch-event-situation-persistent-aggregation-increment-20260718-v2\\frontend\\src\\__tests__\\alarmReviewDialog.test.ts"
++++ "b/river-watch-channel-isolation-evidence-db-cleanup-increment-20260720\\frontend\\src\\__tests__\\alarmReviewDialog.test.ts"
+@@ -25,23 +25,30 @@ describe('alarm review dialog', () => {
+     expect(dialogSource).toContain('selectedAlarm.confidence');
+     expect(stylesSource).toMatch(/\.alarm-review-video-meta\s*{[^}]*grid-template-columns:\s*repeat\(3,\s*minmax\(0,\s*1fr\)\)/s);
+   });
+ 
+   it('renders persisted alarm-time media and reports missing evidence explicitly', () => {
++    const workspaceSource = readFileSync(resolve(__dirname, '../composables/useWorkspace.ts'), 'utf8');
+     expect(dialogSource).toContain("selectedAlarmEvidenceMedia?.type === 'video'");
+     expect(dialogSource).toContain("selectedAlarmEvidenceMedia?.type === 'image'");
+-    expect(dialogSource).toContain('该告警未保存历史截图或片段，禁止使用当前实时视频替代');
++    expect(dialogSource).toContain('{{ selectedAlarmEvidenceStatusText }}');
++    expect(workspaceSource).toContain('该告警未保存历史截图或片段，禁止使用当前实时视频替代');
+     expect(stylesSource).toContain('.alarm-evidence-media');
+   });
+ 
+   it('loads captured alarm evidence through the authenticated evidence endpoint', () => {
+     const workspaceSource = readFileSync(resolve(__dirname, '../composables/useWorkspace.ts'), 'utf8');
+     expect(workspaceSource).toContain('/api/alarm/alarms/${encodeURIComponent(alarmId)}/evidence');
+     expect(workspaceSource).toContain('/api/alarm/alarms/${encodeURIComponent(alarmId)}/evidence/metadata');
+     expect(workspaceSource).toContain('capturedAlarmEvidenceUrl.value');
+     expect(workspaceSource).toContain('capturedAlarmEvidenceMetadata.value');
+     expect(workspaceSource).toContain('Authorization = `Bearer ${platform.authToken}`');
++    expect(workspaceSource).toContain('async function loadAlarmEvidence(alarmId?: string)');
++    expect(workspaceSource).toContain('const reopeningSelectedAlarm = selectedAlarm.value?.id === id;');
++    expect(workspaceSource).toContain('if (reopeningSelectedAlarm) void loadAlarmEvidence(id);');
++    expect(workspaceSource).toContain('selectedAlarmEvidenceStatusText');
++    expect(dialogSource).toContain('{{ selectedAlarmEvidenceStatusText }}');
+   });
+ 
+   it('renders the alarm detail fields in three columns', () => {
+     expect(dialogSource).toContain('class="alarm-review-detail-grid"');
+     expect(dialogSource.match(/class="alarm-review-detail-item"/g)).toHaveLength(13);
+
