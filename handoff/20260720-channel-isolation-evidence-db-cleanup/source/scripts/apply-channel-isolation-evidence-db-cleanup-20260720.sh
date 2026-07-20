@@ -257,4 +257,3 @@ echo "VERIFY OK"
 echo "DONE"
 echo "Database backup: $DB_BACKUP"
 echo "Rollback backup: $BACKUP_DIR"
-

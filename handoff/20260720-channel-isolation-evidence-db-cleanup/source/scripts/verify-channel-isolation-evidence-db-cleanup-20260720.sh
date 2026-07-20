@@ -31,4 +31,3 @@ AND type IN ('\''墙体裂痕'\'','\''污水渗漏'\'','\''地面水渍'\'','\''
 [ "$wrong" = "0" ] || { echo "ERROR: wrong river-channel structure alarms=$wrong" >&2; exit 1; }
 echo "wrong_river_structure_alarms=0"
 echo "VERIFY OK"
-

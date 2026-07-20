@@ -5,4 +5,3 @@
 - Frontend behavior: alarm-time evidence is fetched again for same-alarm reopen and errors are visible.
 - Database cleanup: authorized only when `CONFIRM_CLEAR_MESSAGES=YES`; data-only SQL backup is verified before delete.
 - Rollback: restores source, runtime files, environment files, web assets, service state and cleared database records.
-

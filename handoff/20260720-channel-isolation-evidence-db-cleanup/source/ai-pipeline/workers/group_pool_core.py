@@ -93,4 +93,3 @@ def filter_boxes(
         if float(box.get("score", 0.0)) >= threshold
         and (not allowed or str(box.get("cls") or box.get("label") or box.get("name") or "").strip() in allowed)
     ]
-

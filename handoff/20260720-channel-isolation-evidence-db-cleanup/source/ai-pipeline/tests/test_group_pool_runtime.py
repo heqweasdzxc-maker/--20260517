@@ -163,4 +163,3 @@ def test_failed_session_requests_only_that_session_restart():
     )
     assert first.restart_requests == ["provider failure"]
     assert second.restart_requests == []
-

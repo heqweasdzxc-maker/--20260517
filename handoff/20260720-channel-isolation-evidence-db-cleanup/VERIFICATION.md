@@ -36,4 +36,3 @@ Configuration, devices, users, roles, thresholds, models, algorithms, streams, s
 ## Deployment state
 
 The package is ready for `192.168.2.167` but was not remotely executed from this workstation. The apply script has exact baseline gates, explicit cleanup confirmation, automatic rollback and post-deployment verification.
-

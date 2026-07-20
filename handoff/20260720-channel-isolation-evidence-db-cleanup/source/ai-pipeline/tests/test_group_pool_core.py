@@ -103,4 +103,3 @@ def test_filter_boxes_rejects_classes_outside_channel_allowlist() -> None:
     ]
 
     assert filter_boxes(boxes, 0.50, {"漂浮物", "水色异常"}) == [boxes[0], boxes[2]]
-

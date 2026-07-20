@@ -66,4 +66,3 @@ done < "$BACKUP_DIR/service-state.tsv"
 
 echo "ROLLBACK DONE"
 echo "Restored database: ${DB_BACKUP:-not-recorded}"
-

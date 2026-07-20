@@ -210,4 +210,3 @@ def _roi(value: str | None):
         return None
     parts = tuple(float(item) for item in value.split(","))
     return parts if len(parts) == 4 else None
-

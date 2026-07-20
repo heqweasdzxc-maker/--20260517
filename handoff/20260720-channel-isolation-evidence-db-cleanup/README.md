@@ -45,4 +45,3 @@ sudo env APP_DIR=/home/ai-river/river-watch OPT_DIR=/opt/river-watch \
   bash scripts/rollback-channel-isolation-evidence-db-cleanup-20260720.sh \
   /home/ai-river/river-watch/backups/channel-isolation-evidence-db-cleanup-20260720-YYYYmmdd-HHMMSS
 ```
-

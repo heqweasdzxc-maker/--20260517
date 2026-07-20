@@ -65,4 +65,3 @@ def test_rollback_rejects_paths_outside_deployment_roots() -> None:
     assert 'ERROR: unsafe APP_DIR' in source
     assert 'ERROR: unsafe OPT_DIR' in source
     assert 'ERROR: unsafe rollback directory' in source
-
