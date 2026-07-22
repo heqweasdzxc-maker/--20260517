@@ -1,0 +1,15 @@
+[Unit]
+Description=River Watch high-resolution training image capture
+After=network-online.target
+Wants=network-online.target
+ConditionPathExists=/etc/river-watch/training-capture.conf
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /opt/river-watch/training-capture/training_capture.py --config /etc/river-watch/training-capture.conf
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+TimeoutStartSec=10min
+PrivateTmp=true
+
