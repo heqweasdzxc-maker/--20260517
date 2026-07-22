@@ -1,0 +1,12 @@
+[Unit]
+Description=Capture one high-resolution training image per camera every 30 minutes
+
+[Timer]
+OnActiveSec=30min
+OnUnitActiveSec=30min
+AccuracySec=1min
+Persistent=true
+Unit=river-training-capture.service
+
+[Install]
+WantedBy=timers.target
